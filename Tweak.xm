@@ -109,7 +109,7 @@ static NSString *JevMessageTextForTappedView(UIView *hitView) {
 @interface JevOverlayController : UIViewController
 @property(nonatomic, copy) NSString *titleText;
 @property(nonatomic, copy) NSString *bodyText;
-@property(nonatomic, BOOL) closeOnTap;
+@property(nonatomic, assign) BOOL closeOnTap;
 @end
 
 @implementation JevOverlayController
