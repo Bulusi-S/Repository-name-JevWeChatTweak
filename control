@@ -1,0 +1,9 @@
+Package: com.mrs.jevwechat
+Name: JevWeChatTweak
+Version: 0.1.0
+Architecture: iphoneos-arm64
+Description: Minimal Jev test UI tweak for WeChat.
+Maintainer: JevWeChatTweak
+Author: JevWeChatTweak
+Section: Tweaks
+Depends: firmware (>= 15.0)
