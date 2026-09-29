@@ -7,20 +7,13 @@ static NSInteger const kJevButtonTag = 20260929;
 
 static UIWindow *JevFindActiveWindow(void) {
     for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
-        if (scene.activationState != UISceneActivationStateForegroundActive) {
-            continue;
-        }
-
-        if (![scene isKindOfClass:[UIWindowScene class]]) {
-            continue;
-        }
+        if (scene.activationState != UISceneActivationStateForegroundActive) continue;
+        if (![scene isKindOfClass:[UIWindowScene class]]) continue;
 
         UIWindowScene *windowScene = (UIWindowScene *)scene;
 
         for (UIWindow *window in windowScene.windows) {
-            if (window.isKeyWindow) {
-                return window;
-            }
+            if (window.isKeyWindow) return window;
         }
 
         for (UIWindow *window in windowScene.windows) {
@@ -36,15 +29,10 @@ static UIWindow *JevFindActiveWindow(void) {
 }
 
 static UIViewController *JevTopViewController(UIWindow *window) {
-    if (!window) {
-        return nil;
-    }
+    if (!window) return nil;
 
     UIViewController *vc = window.rootViewController;
-
-    if (!vc) {
-        return nil;
-    }
+    if (!vc) return nil;
 
     while (vc.presentedViewController) {
         vc = vc.presentedViewController;
@@ -53,29 +41,30 @@ static UIViewController *JevTopViewController(UIWindow *window) {
     return vc;
 }
 
-#pragma mark - Visible Text
+#pragma mark - Visible WeChat Text
 
 static void JevCollectText(UIView *view,
                            NSMutableArray<NSString *> *result) {
-    if (!view) {
-        return;
-    }
+    if (!view) return;
 
     if ([view isKindOfClass:[UILabel class]]) {
+
         NSString *text = [(UILabel *)view text];
 
         if (text.length > 0) {
             [result addObject:text];
         }
-    }
-    else if ([view isKindOfClass:[UITextView class]]) {
+
+    } else if ([view isKindOfClass:[UITextView class]]) {
+
         NSString *text = [(UITextView *)view text];
 
         if (text.length > 0) {
             [result addObject:text];
         }
-    }
-    else if ([view isKindOfClass:[UITextField class]]) {
+
+    } else if ([view isKindOfClass:[UITextField class]]) {
+
         NSString *text = [(UITextField *)view text];
 
         if (text.length > 0) {
@@ -89,6 +78,7 @@ static void JevCollectText(UIView *view,
 }
 
 static NSString *JevVisibleConversationText(UIWindow *window) {
+
     NSMutableArray<NSString *> *items =
         [NSMutableArray array];
 
@@ -106,8 +96,7 @@ static NSString *JevVisibleConversationText(UIWindow *window) {
             [raw stringByTrimmingCharactersInSet:
                 [NSCharacterSet whitespaceAndNewlineCharacterSet]];
 
-        if (text.length < 2 ||
-            text.length > 500) {
+        if (text.length < 2 || text.length > 500) {
             continue;
         }
 
@@ -119,9 +108,11 @@ static NSString *JevVisibleConversationText(UIWindow *window) {
         [clean addObject:text];
     }
 
+    // 最多保留 20 条可见文字
     NSUInteger maxItems = 20;
 
     if (clean.count > maxItems) {
+
         clean =
             [[clean subarrayWithRange:
                 NSMakeRange(clean.count - maxItems,
@@ -131,7 +122,7 @@ static NSString *JevVisibleConversationText(UIWindow *window) {
     return [clean componentsJoinedByString:@"\n"];
 }
 
-#pragma mark - Alert
+#pragma mark - UI
 
 static void JevShowAlert(NSString *title,
                          NSString *message) {
@@ -144,9 +135,7 @@ static void JevShowAlert(NSString *title,
         UIViewController *presenter =
             JevTopViewController(window);
 
-        if (!presenter) {
-            return;
-        }
+        if (!presenter) return;
 
         UIAlertController *alert =
             [UIAlertController
@@ -167,8 +156,6 @@ static void JevShowAlert(NSString *title,
     });
 }
 
-#pragma mark - Loading
-
 static void JevShowLoading(void) {
 
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -179,9 +166,7 @@ static void JevShowLoading(void) {
         UIViewController *presenter =
             JevTopViewController(window);
 
-        if (!presenter) {
-            return;
-        }
+        if (!presenter) return;
 
         UIAlertController *alert =
             [UIAlertController
@@ -189,6 +174,7 @@ static void JevShowLoading(void) {
                 message:@"正在分析当前聊天……"
                 preferredStyle:UIAlertControllerStyleAlert];
 
+        // 用 Tag 标记 Loading Alert
         alert.view.tag = 20260930;
 
         [presenter
@@ -205,16 +191,12 @@ static void JevHideLoading(void) {
         UIWindow *window =
             JevFindActiveWindow();
 
-        if (!window) {
-            return;
-        }
+        if (!window) return;
 
         UIViewController *vc =
             window.rootViewController;
 
-        if (!vc) {
-            return;
-        }
+        if (!vc) return;
 
         while (vc.presentedViewController) {
 
@@ -237,119 +219,11 @@ static void JevHideLoading(void) {
     });
 }
 
-#pragma mark - API Key
+static void JevAskForAPIKey(void);
+
 static void JevCallAPIWithState(NSString *state);
-static void JevAskForAPIKey(void) {
 
-    dispatch_async(dispatch_get_main_queue(), ^{
-
-        UIWindow *window =
-            JevFindActiveWindow();
-
-        UIViewController *presenter =
-            JevTopViewController(window);
-
-        if (!presenter) {
-            return;
-        }
-
-        UIAlertController *alert =
-            [UIAlertController
-                alertControllerWithTitle:@"Jev API Key"
-                message:@"输入你的 Jev API Key。只保存在本机。"
-                preferredStyle:UIAlertControllerStyleAlert];
-
-        [alert addTextFieldWithConfigurationHandler:
-            ^(UITextField *field) {
-
-            field.placeholder = @"API Key";
-            field.secureTextEntry = YES;
-            field.clearButtonMode =
-                UITextFieldViewModeWhileEditing;
-        }];
-
-        [alert addAction:
-            [UIAlertAction
-                actionWithTitle:@"取消"
-                style:UIAlertActionStyleCancel
-                handler:^(UIAlertAction *action) {
-
-            JevHideLoading();
-        }]];
-
-        [alert addAction:
-            [UIAlertAction
-                actionWithTitle:@"保存并分析"
-                style:UIAlertActionStyleDefault
-                handler:^(UIAlertAction *action) {
-
-            NSString *key =
-                [alert.textFields.firstObject.text
-                    stringByTrimmingCharactersInSet:
-                    [NSCharacterSet
-                        whitespaceAndNewlineCharacterSet]];
-
-            if (key.length < 10) {
-
-                JevShowAlert(
-                    @"Jev",
-                    @"API Key 看起来不正确。"
-                );
-
-                return;
-            }
-
-            [[NSUserDefaults standardUserDefaults]
-                setObject:key
-                forKey:kJevAPIKeyKey];
-
-            [[NSUserDefaults standardUserDefaults]
-                synchronize];
-
-            /*
-             等 API Key 弹窗关闭后，
-             再启动 Loading。
-             避免两个 UIAlertController 叠在一起。
-             */
-
-            dispatch_async(
-                dispatch_get_main_queue(),
-                ^{
-
-                UIWindow *currentWindow =
-                    JevFindActiveWindow();
-
-                NSString *currentState =
-                    JevVisibleConversationText(
-                        currentWindow
-                    );
-
-                if (currentState.length < 5) {
-
-                    JevShowAlert(
-                        @"Jev",
-                        @"API Key 已保存，但没有读取到足够的聊天文字。"
-                    );
-
-                    return;
-                }
-
-                JevShowLoading();
-
-                JevCallAPIWithState(
-                    currentState
-                );
-            });
-        }]];
-
-        [presenter
-            presentViewController:alert
-            animated:YES
-            completion:nil];
-    });
-}
-
-#pragma mark - Response Formatting
+#pragma mark - API Response Formatting
 
 static NSString *JevFormatAnswer(
     NSDictionary *answer) {
@@ -362,6 +236,10 @@ static NSString *JevFormatAnswer(
 
     NSString *type =
         answer[@"type"];
+
+    /*
+     choice
+     */
 
     if ([type isEqualToString:@"choice"]) {
 
@@ -390,6 +268,10 @@ static NSString *JevFormatAnswer(
                     choice];
         }
     }
+
+    /*
+     score
+     */
 
     if ([type isEqualToString:@"score"]) {
 
@@ -420,6 +302,10 @@ static NSString *JevFormatAnswer(
                     score.doubleValue];
         }
     }
+
+    /*
+     noul
+     */
 
     if ([type isEqualToString:@"noul"]) {
 
@@ -452,6 +338,7 @@ static NSString *JevServerErrorText(NSData *data) {
             encoding:NSUTF8StringEncoding];
 
     if (text.length > 1500) {
+
         text =
             [text substringToIndex:1500];
     }
@@ -461,18 +348,201 @@ static NSString *JevServerErrorText(NSData *data) {
         : @"服务器返回了无法显示的错误内容。";
 }
 
-#pragma mark - API
+#pragma mark - Loading Result Helper
 
-static void JevCallAPIWithState(NSString *state) {
+static void JevHideLoadingAndShowAlert(
+    NSString *title,
+    NSString *message) {
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+
+        UIWindow *window =
+            JevFindActiveWindow();
+
+        if (!window) return;
+
+        UIViewController *vc =
+            window.rootViewController;
+
+        if (!vc) return;
+
+        while (vc.presentedViewController) {
+
+            UIViewController *next =
+                vc.presentedViewController;
+
+            if ([next isKindOfClass:
+                    [UIAlertController class]] &&
+                next.view.tag == 20260930) {
+
+                [next
+                    dismissViewControllerAnimated:NO
+                    completion:^{
+
+                    JevShowAlert(title, message);
+                }];
+
+                return;
+            }
+
+            vc = next;
+        }
+
+        JevShowAlert(title, message);
+    });
+}
+
+#pragma mark - API Key
+
+static void JevAskForAPIKey(void) {
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+
+        UIWindow *window =
+            JevFindActiveWindow();
+
+        UIViewController *presenter =
+            JevTopViewController(window);
+
+        if (!presenter) return;
+
+        NSString *oldKey =
+            [[NSUserDefaults standardUserDefaults]
+                stringForKey:kJevAPIKeyKey];
+
+        BOOL editing =
+            oldKey.length > 0;
+
+        NSString *title =
+            editing
+                ? @"修改 Jev API Key"
+                : @"Jev API Key";
+
+        NSString *message =
+            editing
+                ? @"输入新的 Jev API Key，保存后会覆盖当前 Key。"
+                : @"输入你的 Jev API Key。测试版只保存在本机，不会写入 GitHub。";
+
+        UIAlertController *alert =
+            [UIAlertController
+                alertControllerWithTitle:title
+                message:message
+                preferredStyle:UIAlertControllerStyleAlert];
+
+        [alert addTextFieldWithConfigurationHandler:
+            ^(UITextField *field) {
+
+            field.placeholder =
+                @"sk_……";
+
+            field.secureTextEntry =
+                YES;
+
+            field.clearButtonMode =
+                UITextFieldViewModeWhileEditing;
+
+            if (editing) {
+                field.text = oldKey;
+            }
+        }];
+
+        /*
+         取消
+         */
+
+        [alert addAction:
+            [UIAlertAction
+                actionWithTitle:@"取消"
+                style:UIAlertActionStyleCancel
+                handler:^(UIAlertAction *action) {
+
+            JevHideLoading();
+        }]];
+
+        /*
+         保存并分析
+         */
+
+        [alert addAction:
+            [UIAlertAction
+                actionWithTitle:@"保存并分析"
+                style:UIAlertActionStyleDefault
+                handler:^(UIAlertAction *action) {
+
+            NSString *key =
+                [alert.textFields.firstObject.text
+                    stringByTrimmingCharactersInSet:
+                        [NSCharacterSet
+                            whitespaceAndNewlineCharacterSet]];
+
+            if (key.length < 10) {
+
+                JevShowAlert(
+                    @"Jev",
+                    @"API Key 看起来不正确。"
+                );
+
+                return;
+            }
+
+            /*
+             覆盖旧 Key
+             */
+
+            [[NSUserDefaults standardUserDefaults]
+                setObject:key
+                forKey:kJevAPIKeyKey];
+
+            [[NSUserDefaults standardUserDefaults]
+                synchronize];
+
+            /*
+             等 Key 对话框关闭
+             */
+
+            dispatch_async(
+                dispatch_get_main_queue(),
+                ^{
+
+                UIWindow *currentWindow =
+                    JevFindActiveWindow();
+
+                NSString *currentState =
+                    JevVisibleConversationText(
+                        currentWindow);
+
+                if (currentState.length < 5) {
+
+                    JevShowAlert(
+                        @"Jev",
+                        @"API Key 已保存，但没有读取到足够的聊天文字。"
+                    );
+
+                    return;
+                }
+
+                JevShowLoading();
+
+                JevCallAPIWithState(
+                    currentState);
+            });
+        }]];
+
+        [presenter
+            presentViewController:alert
+            animated:YES
+            completion:nil];
+    });
+}
+
+#pragma mark - Jev API
+
+static void JevCallAPIWithState(
+    NSString *state) {
 
     NSString *apiKey =
         [[NSUserDefaults standardUserDefaults]
             stringForKey:kJevAPIKeyKey];
-
-    /*
-     如果没有 Key，直接进入 Key 输入流程。
-     不显示 Loading。
-     */
 
     if (apiKey.length == 0) {
 
@@ -481,17 +551,43 @@ static void JevCallAPIWithState(NSString *state) {
         return;
     }
 
+    /*
+     Jev System One
+
+     POST:
+     https://thejevai.com/v1/systemone
+    */
+
     NSDictionary *body = @{
 
-        @"model": @"jev-latest",
+        /*
+         当前模型
+         */
 
-        @"state": state ?: @"",
+        @"model":
+            @"jev-latest",
+
+        /*
+         当前微信可见聊天内容
+         */
+
+        @"state":
+            state ?: @"",
+
+        /*
+         三个分析问题
+         */
 
         @"questions": @{
 
+            /*
+             对话意图
+             */
+
             @"intent": @{
 
-                @"type": @"choice",
+                @"type":
+                    @"choice",
 
                 @"instructions":
                     @"Classify the main intent of the visible conversation from the user's perspective.",
@@ -518,9 +614,14 @@ static void JevCallAPIWithState(NSString *state) {
                 }
             },
 
+            /*
+             紧急程度
+             */
+
             @"urgency": @{
 
-                @"type": @"score",
+                @"type":
+                    @"score",
 
                 @"instructions":
                     @"Rate how urgent the situation conveyed by the visible conversation is.",
@@ -539,9 +640,14 @@ static void JevCallAPIWithState(NSString *state) {
                 ]
             },
 
+            /*
+             是否需要谨慎
+             */
+
             @"needs_care": @{
 
-                @"type": @"noul",
+                @"type":
+                    @"noul",
 
                 @"instructions":
                     @"Does this conversation require extra care before replying because a careless response could worsen the situation?",
@@ -557,6 +663,10 @@ static void JevCallAPIWithState(NSString *state) {
             }
         }
     };
+
+    /*
+     JSON
+     */
 
     NSError *jsonError = nil;
 
@@ -578,70 +688,139 @@ static void JevCallAPIWithState(NSString *state) {
         return;
     }
 
+    /*
+     API URL
+     */
+
     NSURL *url =
         [NSURL URLWithString:
             @"https://thejevai.com/v1/systemone"];
 
     NSMutableURLRequest *request =
-        [NSMutableURLRequest requestWithURL:url];
+        [NSMutableURLRequest
+            requestWithURL:url];
 
-    request.HTTPMethod = @"POST";
+    request.HTTPMethod =
+        @"POST";
+
+    /*
+     Bearer
+     */
+
+    NSString *authorizationKey =
+        apiKey;
+
+    /*
+     防止用户复制成
+     Bearer Bearer xxx
+     */
+
+    if ([authorizationKey
+            hasPrefix:@"Bearer "]) {
+
+        authorizationKey =
+            [authorizationKey
+                substringFromIndex:7];
+    }
 
     [request setValue:
         [NSString stringWithFormat:
             @"Bearer %@",
-            apiKey]
-        forHTTPHeaderField:@"Authorization"];
+            authorizationKey]
+    forHTTPHeaderField:
+        @"Authorization"];
 
     [request setValue:
         @"application/json"
-        forHTTPHeaderField:@"Content-Type"];
+    forHTTPHeaderField:
+        @"Content-Type"];
 
     request.HTTPBody =
         jsonData;
 
+    /*
+     20 秒超时
+     */
+
+    request.timeoutInterval =
+        20.0;
+
+    NSLog(
+        @"[JevWeChatTweak] API request start, state length=%lu",
+        (unsigned long)state.length
+    );
+
+    /*
+     API 请求
+     */
+
     NSURLSessionDataTask *task =
+
         [[NSURLSession sharedSession]
+
             dataTaskWithRequest:request
+
             completionHandler:
             ^(NSData *data,
               NSURLResponse *response,
               NSError *error) {
 
+        /*
+         网络错误
+         */
+
         if (error) {
 
-            JevHideLoading();
+            JevHideLoadingAndShowAlert(
 
-            JevShowAlert(
                 @"Jev 网络错误",
-                [NSString stringWithFormat:
-                    @"请求失败：\n%@",
-                    error.localizedDescription]
+
+                [NSString
+                    stringWithFormat:
+                        @"请求失败：\n%@",
+                        error.localizedDescription]
             );
 
             return;
         }
+
+        /*
+         HTTP
+         */
 
         NSHTTPURLResponse *http =
             (NSHTTPURLResponse *)response;
 
+        /*
+         非 2xx
+         */
+
         if (http.statusCode < 200 ||
             http.statusCode >= 300) {
 
-            JevHideLoading();
+            NSString *serverError =
+                JevServerErrorText(data);
 
-            JevShowAlert(
+            JevHideLoadingAndShowAlert(
+
                 @"Jev API 错误",
-                [NSString stringWithFormat:
-                    @"HTTP %ld\n\n%@",
-                    (long)http.statusCode,
-                    JevServerErrorText(data)]
+
+                [NSString
+                    stringWithFormat:
+                        @"HTTP %ld\n\n%@",
+                        (long)http.statusCode,
+                        serverError]
             );
 
             return;
         }
 
-        NSError *parseError = nil;
+        /*
+         JSON 解析
+         */
+
+        NSError *parseError =
+            nil;
 
         id json =
             [NSJSONSerialization
@@ -653,11 +832,14 @@ static void JevCallAPIWithState(NSString *state) {
             ![json isKindOfClass:
                 [NSDictionary class]]) {
 
-            JevHideLoading();
+            JevHideLoadingAndShowAlert(
 
-            JevShowAlert(
                 @"Jev",
-                @"API 返回不是有效 JSON。"
+
+                [NSString
+                    stringWithFormat:
+                        @"API 返回不是有效 JSON。\n\n%@",
+                        JevServerErrorText(data)]
             );
 
             return;
@@ -666,57 +848,81 @@ static void JevCallAPIWithState(NSString *state) {
         NSDictionary *payload =
             (NSDictionary *)json;
 
+        /*
+         answers
+         */
+
         NSDictionary *answers =
             payload[@"answers"];
 
         if (![answers isKindOfClass:
                 [NSDictionary class]]) {
 
-            JevHideLoading();
+            JevHideLoadingAndShowAlert(
 
-            JevShowAlert(
                 @"Jev 返回异常",
-                [NSString stringWithFormat:
-                    @"没有找到 answers。\n\n服务器返回：\n%@",
-                    JevServerErrorText(data)]
+
+                [NSString
+                    stringWithFormat:
+                        @"没有找到 answers。\n\n服务器返回：\n%@",
+                        JevServerErrorText(data)]
             );
 
             return;
         }
 
-        NSString *intent =
-            JevFormatAnswer(
-                answers[@"intent"]
-            );
+        /*
+         三个结果
+         */
 
-        NSString *urgency =
-            JevFormatAnswer(
-                answers[@"urgency"]
-            );
+        NSDictionary *intentAnswer =
+            answers[@"intent"];
 
-        NSString *care =
+        NSDictionary *urgencyAnswer =
+            answers[@"urgency"];
+
+        NSDictionary *careAnswer =
+            answers[@"needs_care"];
+
+        NSString *intentText =
             JevFormatAnswer(
-                answers[@"needs_care"]
-            );
+                intentAnswer);
+
+        NSString *urgencyText =
+            JevFormatAnswer(
+                urgencyAnswer);
+
+        NSString *careText =
+            JevFormatAnswer(
+                careAnswer);
+
+        /*
+         最终结果
+         */
 
         NSString *message =
-            [NSString stringWithFormat:
 
-                @"对话意图\n%@\n\n"
-                 "紧急程度\n%@\n\n"
-                 "是否需要谨慎\n%@",
+            [NSString
+                stringWithFormat:
 
-                intent,
+                    @"对话意图\n%@\n\n"
+                     "紧急程度\n%@\n\n"
+                     "是否需要谨慎\n%@",
 
-                urgency,
+                    intentText,
 
-                care
-            ];
+                    urgencyText,
 
-        JevHideLoading();
+                    careText];
 
-        JevShowAlert(
+        /*
+         关闭 Loading
+         */
+
+        JevHideLoadingAndShowAlert(
+
             @"Jev 分析结果",
+
             message
         );
     }];
@@ -728,13 +934,38 @@ static void JevCallAPIWithState(NSString *state) {
 
 @interface JevController : NSObject
 
-- (void)buttonTapped:(UIButton *)sender;
+- (void)buttonTapped:
+    (UIButton *)sender;
+
+- (void)buttonLongPressed:
+    (UILongPressGestureRecognizer *)gesture;
 
 @end
 
 @implementation JevController
 
-- (void)buttonTapped:(UIButton *)sender {
+/*
+ 长按修改 API Key
+ */
+
+- (void)buttonLongPressed:
+    (UILongPressGestureRecognizer *)gesture {
+
+    if (gesture.state !=
+        UIGestureRecognizerStateBegan) {
+
+        return;
+    }
+
+    JevAskForAPIKey();
+}
+
+/*
+ 普通点击
+ */
+
+- (void)buttonTapped:
+    (UIButton *)sender {
 
     UIWindow *window =
         JevFindActiveWindow();
@@ -749,16 +980,22 @@ static void JevCallAPIWithState(NSString *state) {
         return;
     }
 
+    /*
+     读取当前可见聊天
+     */
+
     NSString *state =
         JevVisibleConversationText(
-            window
-        );
+            window);
 
     if (state.length < 5) {
 
         JevShowAlert(
+
             @"Jev",
-            @"没有读取到足够的聊天文字。\n\n请先进入具体聊天窗口，再点击 Jev。"
+
+            @"没有读取到足够的聊天文字。\n\n"
+             "请先进入具体聊天窗口，再点击 Jev。"
         );
 
         return;
@@ -770,14 +1007,16 @@ static void JevCallAPIWithState(NSString *state) {
     );
 
     /*
-     关键修复：
-     先检查 API Key。
-     没有 Key 时绝对不能先显示 Loading。
+     检查 API Key
      */
 
     NSString *apiKey =
         [[NSUserDefaults standardUserDefaults]
             stringForKey:kJevAPIKeyKey];
+
+    /*
+     没 Key
+     */
 
     if (apiKey.length == 0) {
 
@@ -786,11 +1025,18 @@ static void JevCallAPIWithState(NSString *state) {
         return;
     }
 
+    /*
+     开始 Loading
+     */
+
     JevShowLoading();
 
+    /*
+     调 API
+     */
+
     JevCallAPIWithState(
-        state
-    );
+        state);
 }
 
 @end
@@ -804,61 +1050,98 @@ static void JevInstallButton(void) {
     UIWindow *window =
         JevFindActiveWindow();
 
-    if (!window) {
-        return;
-    }
+    if (!window) return;
 
-    if ([window viewWithTag:kJevButtonTag]) {
+    /*
+     防止重复创建
+     */
+
+    if ([window
+            viewWithTag:kJevButtonTag]) {
+
         return;
     }
 
     if (!gJevController) {
+
         gJevController =
             [JevController new];
     }
 
     UIButton *button =
-        [UIButton buttonWithType:
-            UIButtonTypeSystem];
+        [UIButton
+            buttonWithType:
+                UIButtonTypeSystem];
 
     button.tag =
         kJevButtonTag;
 
     button.frame =
         CGRectMake(
+
             window.bounds.size.width - 86.0,
+
             window.safeAreaInsets.top + 20.0,
+
             66.0,
+
             40.0
         );
 
     button.autoresizingMask =
+
         UIViewAutoresizingFlexibleLeftMargin |
+
         UIViewAutoresizingFlexibleBottomMargin;
 
     button.backgroundColor =
-        [UIColor colorWithWhite:
-            0.08
+        [UIColor
+            colorWithWhite:0.08
             alpha:0.92];
 
-    [button setTitle:
-        @"Jev"
+    [button
+        setTitle:@"Jev"
         forState:UIControlStateNormal];
 
-    [button setTitleColor:
-        [UIColor whiteColor]
+    [button
+        setTitleColor:[UIColor whiteColor]
         forState:UIControlStateNormal];
 
     button.layer.cornerRadius =
         12.0;
 
-    [button addTarget:
-        gJevController
+    /*
+     普通点击
+     */
+
+    [button
+        addTarget:gJevController
         action:@selector(buttonTapped:)
         forControlEvents:
             UIControlEventTouchUpInside];
 
-    [window addSubview:button];
+    /*
+     长按
+     */
+
+    UILongPressGestureRecognizer *longPress =
+
+        [[UILongPressGestureRecognizer alloc]
+
+            initWithTarget:gJevController
+
+            action:@selector(
+                buttonLongPressed:)];
+
+    longPress.minimumPressDuration =
+        0.8;
+
+    [button
+        addGestureRecognizer:
+            longPress];
+
+    [window
+        addSubview:button];
 
     NSLog(
         @"[JevWeChatTweak] full version loaded"
@@ -870,6 +1153,10 @@ static void JevInstallButton(void) {
 %ctor {
 
     @autoreleasepool {
+
+        /*
+         微信进入前台
+         */
 
         [[NSNotificationCenter defaultCenter]
 
@@ -884,26 +1171,26 @@ static void JevInstallButton(void) {
             usingBlock:
             ^(__unused NSNotification *notification) {
 
-                dispatch_after(
+            dispatch_after(
 
-                    dispatch_time(
-                        DISPATCH_TIME_NOW,
-                        (int64_t)
-                            (1 * NSEC_PER_SEC)
-                    ),
+                dispatch_time(
+                    DISPATCH_TIME_NOW,
+                    (int64_t)
+                        (1 * NSEC_PER_SEC)
+                ),
 
-                    dispatch_get_main_queue(),
+                dispatch_get_main_queue(),
 
-                    ^{
+                ^{
 
-                        JevInstallButton();
-                    }
-                );
-            }
-        ];
+                    JevInstallButton();
+
+                }
+            );
+        }];
 
         /*
-         保留这个通知作为兼容流程。
+         外部触发分析
          */
 
         [[NSNotificationCenter defaultCenter]
@@ -919,51 +1206,37 @@ static void JevInstallButton(void) {
             usingBlock:
             ^(__unused NSNotification *notification) {
 
-                UIWindow *window =
-                    JevFindActiveWindow();
+            UIWindow *window =
+                JevFindActiveWindow();
 
-                if (!window) {
+            if (!window) {
 
-                    JevShowAlert(
-                        @"Jev",
-                        @"没有找到当前微信窗口。"
-                    );
-
-                    return;
-                }
-
-                NSString *state =
-                    JevVisibleConversationText(
-                        window
-                    );
-
-                if (state.length < 5) {
-
-                    JevShowAlert(
-                        @"Jev",
-                        @"没有读取到足够的聊天文字。"
-                    );
-
-                    return;
-                }
-
-                NSString *apiKey =
-                    [[NSUserDefaults standardUserDefaults]
-                        stringForKey:kJevAPIKeyKey];
-
-                if (apiKey.length == 0) {
-
-                    JevAskForAPIKey();
-
-                    return;
-                }
-
-                JevShowLoading();
-
-                JevCallAPIWithState(
-                    state
+                JevShowAlert(
+                    @"Jev",
+                    @"没有找到当前微信窗口。"
                 );
+
+                return;
             }
-        ];
+
+            NSString *state =
+                JevVisibleConversationText(
+                    window);
+
+            if (state.length < 5) {
+
+                JevShowAlert(
+                    @"Jev",
+                    @"没有读取到足够的聊天文字。"
+                );
+
+                return;
+            }
+
+            JevShowLoading();
+
+            JevCallAPIWithState(
+                state);
+        }];
     }
 }
