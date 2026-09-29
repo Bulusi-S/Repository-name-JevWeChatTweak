@@ -1,9 +1,7 @@
 #import <UIKit/UIKit.h>
 
-static NSString * const kJevAPIKey = @"JevWeChatAPIKey";
-static NSString * const kJevButtonTag = @"20260929";
-
-#pragma mark - Utilities
+static NSString * const kJevAPIKeyKey = @"JevWeChatAPIKey";
+static NSInteger const kJevButtonTag = 20260929;
 
 static UIWindow *JevFindActiveWindow(void) {
     for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
@@ -25,6 +23,19 @@ static UIWindow *JevFindActiveWindow(void) {
         }
     }
     return nil;
+}
+
+static UIViewController *JevTopViewController(UIWindow *window) {
+    if (!window) return nil;
+
+    UIViewController *vc = window.rootViewController;
+    if (!vc) return nil;
+
+    while (vc.presentedViewController) {
+        vc = vc.presentedViewController;
+    }
+
+    return vc;
 }
 
 static void JevCollectText(UIView *view, NSMutableArray<NSString *> *result) {
@@ -64,33 +75,26 @@ static NSString *JevVisibleConversationText(UIWindow *window) {
         [clean addObject:text];
     }
 
-    // Keep the most recent-looking visible text without trying to depend
-    // on private WeChat classes.
     NSUInteger maxItems = 20;
+
     if (clean.count > maxItems) {
-        clean = [[clean subarrayWithRange:NSMakeRange(clean.count - maxItems, maxItems)] mutableCopy];
+        clean = [[clean subarrayWithRange:
+                  NSMakeRange(clean.count - maxItems, maxItems)] mutableCopy];
     }
 
     return [clean componentsJoinedByString:@"\n"];
 }
 
-#pragma mark - Jev API
-
 static void JevShowAlert(NSString *title, NSString *message) {
     dispatch_async(dispatch_get_main_queue(), ^{
         UIWindow *window = JevFindActiveWindow();
-        if (!window) return;
+        UIViewController *presenter = JevTopViewController(window);
 
-        UIViewController *presenter = window.rootViewController;
         if (!presenter) return;
-
-        while (presenter.presentedViewController) {
-            presenter = presenter.presentedViewController;
-        }
 
         UIAlertController *alert =
             [UIAlertController alertControllerWithTitle:title
-                                                message:message
+                                                message:message ?: @""
                                          preferredStyle:UIAlertControllerStyleAlert];
 
         [alert addAction:
@@ -98,29 +102,56 @@ static void JevShowAlert(NSString *title, NSString *message) {
                                      style:UIAlertActionStyleDefault
                                    handler:nil]];
 
-        [presenter presentViewController:alert animated:YES completion:nil];
+        [presenter presentViewController:alert
+                                 animated:YES
+                               completion:nil];
     });
 }
 
-static void JevAskForAPIKey(void) {
+static void JevShowLoading(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
         UIWindow *window = JevFindActiveWindow();
-        if (!window) return;
+        UIViewController *presenter = JevTopViewController(window);
 
-        UIViewController *presenter = window.rootViewController;
         if (!presenter) return;
 
-        while (presenter.presentedViewController) {
-            presenter = presenter.presentedViewController;
+        UIAlertController *alert =
+            [UIAlertController alertControllerWithTitle:@"Jev"
+                                                message:@"正在分析当前聊天……"
+                                         preferredStyle:UIAlertControllerStyleAlert];
+
+        alert.view.tag = 20260930;
+
+        [presenter presentViewController:alert
+                                 animated:YES
+                               completion:nil];
+    });
+}
+
+static void JevHideLoading(void) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIWindow *window = JevFindActiveWindow();
+        UIViewController *presenter = JevTopViewController(window);
+
+        if ([presenter isKindOfClass:[UIAlertController class]] &&
+            presenter.view.tag == 20260930) {
+            [presenter dismissViewControllerAnimated:NO completion:nil];
         }
+    });
+}static void JevAskForAPIKey(void) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIWindow *window = JevFindActiveWindow();
+        UIViewController *presenter = JevTopViewController(window);
+
+        if (!presenter) return;
 
         UIAlertController *alert =
             [UIAlertController alertControllerWithTitle:@"Jev API Key"
-                                                message:@"第一次使用请输入 Jev API Key。只保存在本机，不写入 GitHub。"
+                                                message:@"输入你的 Jev API Key。只保存在本机。"
                                          preferredStyle:UIAlertControllerStyleAlert];
 
         [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
-            field.placeholder = @"Bearer API Key";
+            field.placeholder = @"API Key";
             field.secureTextEntry = YES;
             field.clearButtonMode = UITextFieldViewModeWhileEditing;
         }];
@@ -134,39 +165,53 @@ static void JevAskForAPIKey(void) {
             [UIAlertAction actionWithTitle:@"保存并分析"
                                      style:UIAlertActionStyleDefault
                                    handler:^(UIAlertAction *action) {
-            NSString *key = alert.textFields.firstObject.text;
+
+            NSString *key =
+                [alert.textFields.firstObject.text
+                 stringByTrimmingCharactersInSet:
+                 [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+
             if (key.length < 10) {
                 JevShowAlert(@"Jev", @"API Key 看起来不正确。");
                 return;
             }
 
-            [[NSUserDefaults standardUserDefaults] setObject:key forKey:kJevAPIKey];
+            [[NSUserDefaults standardUserDefaults]
+                setObject:key
+                forKey:kJevAPIKeyKey];
+
             [[NSUserDefaults standardUserDefaults] synchronize];
 
-            // Re-run after saving.
-            dispatch_async(dispatch_get_main_queue(), ^{
-                [[NSNotificationCenter defaultCenter]
-                    postNotificationName:@"JevRunAnalysis"
-                    object:nil];
-            });
+            [[NSNotificationCenter defaultCenter]
+                postNotificationName:@"JevRunAnalysis"
+                              object:nil];
         }]];
 
-        [presenter presentViewController:alert animated:YES completion:nil];
+        [presenter presentViewController:alert
+                                 animated:YES
+                               completion:nil];
     });
 }
 
-static NSString *JevPrettyAnswer(NSDictionary *answer) {
-    if (![answer isKindOfClass:[NSDictionary class]]) return @"";
+static NSString *JevFormatAnswer(NSDictionary *answer) {
+    if (![answer isKindOfClass:[NSDictionary class]]) {
+        return @"未返回有效结果";
+    }
 
     NSString *type = answer[@"type"];
+
     if ([type isEqualToString:@"choice"]) {
         NSString *choice = answer[@"choice"];
         NSNumber *confidence = answer[@"confidence"];
+
+        if (choice.length && [confidence isKindOfClass:[NSNumber class]]) {
+            return [NSString stringWithFormat:
+                    @"选择：%@\n置信度：%.0f%%",
+                    choice,
+                    confidence.doubleValue * 100.0];
+        }
+
         if (choice.length) {
-            if ([confidence isKindOfClass:[NSNumber class]]) {
-                return [NSString stringWithFormat:@"选择：%@\n置信度：%.0f%%",
-                        choice, confidence.doubleValue * 100.0];
-            }
             return [NSString stringWithFormat:@"选择：%@", choice];
         }
     }
@@ -174,19 +219,29 @@ static NSString *JevPrettyAnswer(NSDictionary *answer) {
     if ([type isEqualToString:@"score"]) {
         NSNumber *score = answer[@"score"];
         NSNumber *confidence = answer[@"confidence"];
+
+        if ([score isKindOfClass:[NSNumber class]] &&
+            [confidence isKindOfClass:[NSNumber class]]) {
+
+            return [NSString stringWithFormat:
+                    @"评分：%.2f\n置信度：%.0f%%",
+                    score.doubleValue,
+                    confidence.doubleValue * 100.0];
+        }
+
         if ([score isKindOfClass:[NSNumber class]]) {
-            if ([confidence isKindOfClass:[NSNumber class]]) {
-                return [NSString stringWithFormat:@"评分：%@\n置信度：%.0f%%",
-                        score, confidence.doubleValue * 100.0];
-            }
-            return [NSString stringWithFormat:@"评分：%@", score];
+            return [NSString stringWithFormat:
+                    @"评分：%.2f",
+                    score.doubleValue];
         }
     }
 
     if ([type isEqualToString:@"noul"]) {
         NSNumber *noul = answer[@"noul"];
+
         if ([noul isKindOfClass:[NSNumber class]]) {
-            return [NSString stringWithFormat:@"概率：%.0f%%",
+            return [NSString stringWithFormat:
+                    @"概率：%.0f%%",
                     noul.doubleValue * 100.0];
         }
     }
@@ -194,8 +249,27 @@ static NSString *JevPrettyAnswer(NSDictionary *answer) {
     return [NSString stringWithFormat:@"%@", answer];
 }
 
+static NSString *JevServerErrorText(NSData *data) {
+    if (!data.length) {
+        return @"服务器没有返回错误详情。";
+    }
+
+    NSString *text =
+        [[NSString alloc] initWithData:data
+                              encoding:NSUTF8StringEncoding];
+
+    if (text.length > 1500) {
+        text = [text substringToIndex:1500];
+    }
+
+    return text.length ? text : @"服务器返回了无法显示的错误内容。";
+}
+
 static void JevCallAPIWithState(NSString *state) {
-    NSString *apiKey = [[NSUserDefaults standardUserDefaults] stringForKey:kJevAPIKey];
+
+    NSString *apiKey =
+        [[NSUserDefaults standardUserDefaults]
+        stringForKey:kJevAPIKeyKey];
 
     if (apiKey.length == 0) {
         JevAskForAPIKey();
@@ -203,128 +277,235 @@ static void JevCallAPIWithState(NSString *state) {
     }
 
     NSDictionary *body = @{
-        @"model": @"typesafe/jev-1.13",
+        @"model": @"jev-latest",
+
         @"state": state ?: @"",
+
         @"questions": @{
+
             @"intent": @{
                 @"type": @"choice",
-                @"instructions": @"What is the main intent of this conversation?",
+
+                @"instructions":
+                    @"Classify the main intent of the visible conversation from the user's perspective.",
+
                 @"criteria": @{
-                    @"question": @"The other person is mainly asking a question or seeking information.",
-                    @"request": @"The other person is asking the user to do something.",
-                    @"social": @"The conversation is mainly social, casual, or relational.",
-                    @"conflict": @"The conversation contains disagreement, tension, complaint, or conflict.",
-                    @"planning": @"The conversation is mainly about arranging plans, timing, or logistics.",
-                    @"other": @"None of the above clearly applies."
+                    @"question":
+                        @"The other person is mainly asking a question or seeking information.",
+
+                    @"request":
+                        @"The other person is asking the user to do something.",
+
+                    @"social":
+                        @"The conversation is mainly casual, social, or relational.",
+
+                    @"conflict":
+                        @"The conversation contains disagreement, tension, complaint, or conflict.",
+
+                    @"planning":
+                        @"The conversation is mainly about plans, timing, or logistics.",
+
+                    @"other":
+                        @"None of the above clearly applies."
                 }
             },
+
             @"urgency": @{
                 @"type": @"score",
-                @"instructions": @"How urgent is the situation conveyed by the conversation?",
+
+                @"instructions":
+                    @"Rate how urgent the situation conveyed by the visible conversation is.",
+
                 @"criteria": @[
-                    @"not urgent",
-                    @"low urgency",
-                    @"moderate urgency",
-                    @"high urgency",
-                    @"critical urgency"
+                    @"Not urgent",
+                    @"Low urgency",
+                    @"Moderate urgency",
+                    @"High urgency",
+                    @"Critical urgency"
                 ]
             },
+
             @"needs_care": @{
                 @"type": @"noul",
-                @"instructions": @"Does this conversation require extra care before replying because a careless response could worsen the situation?"
+
+                @"instructions":
+                    @"Does this conversation require extra care before replying because a careless response could worsen the situation?",
+
+                @"criteria": @{
+                    @"true":
+                        @"A careless reply could reasonably worsen the situation.",
+
+                    @"false":
+                        @"A normal reply is unlikely to worsen the situation."
+                }
             }
         }
     };
 
     NSError *jsonError = nil;
-    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:body options:0 error:&jsonError];
+
+    NSData *jsonData =
+        [NSJSONSerialization dataWithJSONObject:body
+                                        options:0
+                                          error:&jsonError];
 
     if (!jsonData || jsonError) {
+        JevHideLoading();
         JevShowAlert(@"Jev", @"请求数据生成失败。");
         return;
     }
 
-    NSURL *url = [NSURL URLWithString:@"https://thejevai.com/v1/systemone"];
-    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
+    NSURL *url =
+        [NSURL URLWithString:
+        @"https://thejevai.com/v1/systemone"];
+
+    NSMutableURLRequest *request =
+        [NSMutableURLRequest requestWithURL:url];
+
     request.HTTPMethod = @"POST";
-    [request setValue:[NSString stringWithFormat:@"Bearer %@", apiKey]
-   forHTTPHeaderField:@"Authorization"];
-    [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+
+    [request setValue:
+        [NSString stringWithFormat:@"Bearer %@", apiKey]
+       forHTTPHeaderField:@"Authorization"];
+
+    [request setValue:@"application/json"
+   forHTTPHeaderField:@"Content-Type"];
+
     request.HTTPBody = jsonData;
 
     NSURLSessionDataTask *task =
-    [[NSURLSession sharedSession]
+        [[NSURLSession sharedSession]
         dataTaskWithRequest:request
-        completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        completionHandler:
+        ^(NSData *data,
+          NSURLResponse *response,
+          NSError *error) {
 
         if (error) {
-            JevShowAlert(@"Jev", [NSString stringWithFormat:@"网络请求失败：\n%@",
-                                  error.localizedDescription]);
+            JevHideLoading();
+
+            JevShowAlert(
+                @"Jev 网络错误",
+                [NSString stringWithFormat:
+                    @"请求失败：\n%@",
+                    error.localizedDescription]
+            );
+
             return;
         }
 
-        NSHTTPURLResponse *http = (NSHTTPURLResponse *)response;
+        NSHTTPURLResponse *http =
+            (NSHTTPURLResponse *)response;
 
-        if (http.statusCode < 200 || http.statusCode >= 300) {
-            NSString *serverText = data.length
-                ? [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding]
-                : @"";
-            JevShowAlert(@"Jev",
-                         [NSString stringWithFormat:@"API 返回 HTTP %ld\n%@",
-                          (long)http.statusCode, serverText ?: @""]);
+        if (http.statusCode < 200 ||
+            http.statusCode >= 300) {
+
+            JevHideLoading();
+
+            JevShowAlert(
+                @"Jev API 错误",
+                [NSString stringWithFormat:
+                    @"HTTP %ld\n\n%@",
+                    (long)http.statusCode,
+                    JevServerErrorText(data)]
+            );
+
             return;
         }
 
         NSError *parseError = nil;
-        NSDictionary *payload =
-            [NSJSONSerialization JSONObjectWithData:data options:0 error:&parseError];
 
-        if (!payload || parseError) {
-            JevShowAlert(@"Jev", @"API 返回内容无法解析。");
+        id json =
+            [NSJSONSerialization
+                JSONObjectWithData:data
+                options:0
+                error:&parseError];
+
+        if (parseError ||
+            ![json isKindOfClass:[NSDictionary class]]) {
+
+            JevHideLoading();
+
+            JevShowAlert(
+                @"Jev",
+                @"API 返回不是有效 JSON。"
+            );
+
             return;
         }
 
+        NSDictionary *payload = (NSDictionary *)json;
         NSDictionary *answers = payload[@"answers"];
+
         if (![answers isKindOfClass:[NSDictionary class]]) {
-            JevShowAlert(@"Jev", @"API 没有返回 answers。");
+
+            JevHideLoading();
+
+            JevShowAlert(
+                @"Jev 返回异常",
+                [NSString stringWithFormat:
+                    @"没有找到 answers。\n\n服务器返回：\n%@",
+                    JevServerErrorText(data)]
+            );
+
             return;
         }
 
-        NSString *intent = JevPrettyAnswer(answers[@"intent"]);
-        NSString *urgency = JevPrettyAnswer(answers[@"urgency"]);
-        NSString *care = JevPrettyAnswer(answers[@"needs_care"]);
+        NSString *intent =
+            JevFormatAnswer(answers[@"intent"]);
+
+        NSString *urgency =
+            JevFormatAnswer(answers[@"urgency"]);
+
+        NSString *care =
+            JevFormatAnswer(answers[@"needs_care"]);
 
         NSString *message =
             [NSString stringWithFormat:
-                @"%@\n\n%@\n\n需要谨慎：%@",
-                intent.length ? intent : @"意图：未返回",
-                urgency.length ? urgency : @"紧急程度：未返回",
-                care.length ? care : @"未返回"];
+                @"对话意图\n%@\n\n"
+                 "紧急程度\n%@\n\n"
+                 "是否需要谨慎\n%@",
+                 intent,
+                 urgency,
+                 care];
+
+        JevHideLoading();
 
         JevShowAlert(@"Jev 分析结果", message);
     }];
 
     [task resume];
-}
-
-#pragma mark - Controller
-
-@interface JevController : NSObject
+}@interface JevController : NSObject
 - (void)buttonTapped:(UIButton *)sender;
 @end
 
 @implementation JevController
 
 - (void)buttonTapped:(UIButton *)sender {
+
     UIWindow *window = JevFindActiveWindow();
-    if (!window) return;
 
-    NSString *state = JevVisibleConversationText(window);
-
-    if (state.length < 5) {
-        JevShowAlert(@"Jev", @"没有读取到足够的聊天文字。\n请进入具体聊天窗口后再点 Jev。");
+    if (!window) {
+        JevShowAlert(@"Jev", @"没有找到当前微信窗口。");
         return;
     }
+
+    NSString *state =
+        JevVisibleConversationText(window);
+
+    if (state.length < 5) {
+
+        JevShowAlert(
+            @"Jev",
+            @"没有读取到足够的聊天文字。\n\n请先进入具体聊天窗口，再点击 Jev。"
+        );
+
+        return;
+    }
+
+    NSLog(@"[JevWeChatTweak] state:\n%@", state);
+
+    JevShowLoading();
 
     JevCallAPIWithState(state);
 }
@@ -334,24 +515,31 @@ static void JevCallAPIWithState(NSString *state) {
 static JevController *gJevController;
 
 static void JevInstallButton(void) {
+
     UIWindow *window = JevFindActiveWindow();
+
     if (!window) return;
 
-    if ([window viewWithTag:20260929]) return;
+    if ([window viewWithTag:kJevButtonTag]) {
+        return;
+    }
 
     if (!gJevController) {
         gJevController = [JevController new];
     }
 
-    UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
-    button.tag = 20260929;
+    UIButton *button =
+        [UIButton buttonWithType:UIButtonTypeSystem];
 
-    button.frame = CGRectMake(
-        window.bounds.size.width - 86.0,
-        window.safeAreaInsets.top + 20.0,
-        66.0,
-        40.0
-    );
+    button.tag = kJevButtonTag;
+
+    button.frame =
+        CGRectMake(
+            window.bounds.size.width - 86.0,
+            window.safeAreaInsets.top + 20.0,
+            66.0,
+            40.0
+        );
 
     button.autoresizingMask =
         UIViewAutoresizingFlexibleLeftMargin |
@@ -360,8 +548,12 @@ static void JevInstallButton(void) {
     button.backgroundColor =
         [UIColor colorWithWhite:0.08 alpha:0.92];
 
-    [button setTitle:@"Jev" forState:UIControlStateNormal];
-    [button setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    [button setTitle:@"Jev"
+            forState:UIControlStateNormal];
+
+    [button setTitleColor:[UIColor whiteColor]
+                 forState:UIControlStateNormal];
+
     button.layer.cornerRadius = 12.0;
 
     [button addTarget:gJevController
@@ -375,15 +567,22 @@ static void JevInstallButton(void) {
 
 %ctor {
     @autoreleasepool {
+
         [[NSNotificationCenter defaultCenter]
-            addObserverForName:UIApplicationDidBecomeActiveNotification
-                        object:nil
-                         queue:[NSOperationQueue mainQueue]
-                    usingBlock:^(__unused NSNotification *notification) {
+            addObserverForName:
+                UIApplicationDidBecomeActiveNotification
+            object:nil
+            queue:[NSOperationQueue mainQueue]
+            usingBlock:
+            ^(__unused NSNotification *notification) {
 
             dispatch_after(
-                dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1 * NSEC_PER_SEC)),
-                dispatch_get_main_queue(), ^{
+                dispatch_time(
+                    DISPATCH_TIME_NOW,
+                    (int64_t)(1 * NSEC_PER_SEC)
+                ),
+                dispatch_get_main_queue(),
+                ^{
                     JevInstallButton();
                 }
             );
@@ -391,17 +590,34 @@ static void JevInstallButton(void) {
 
         [[NSNotificationCenter defaultCenter]
             addObserverForName:@"JevRunAnalysis"
-                        object:nil
-                         queue:[NSOperationQueue mainQueue]
-                    usingBlock:^(__unused NSNotification *notification) {
-            UIWindow *window = JevFindActiveWindow();
-            if (!window) return;
+            object:nil
+            queue:[NSOperationQueue mainQueue]
+            usingBlock:
+            ^(__unused NSNotification *notification) {
 
-            NSString *state = JevVisibleConversationText(window);
-            if (state.length < 5) {
-                JevShowAlert(@"Jev", @"没有读取到足够的聊天文字。");
+            UIWindow *window =
+                JevFindActiveWindow();
+
+            if (!window) {
+                JevShowAlert(
+                    @"Jev",
+                    @"没有找到当前微信窗口。"
+                );
                 return;
             }
+
+            NSString *state =
+                JevVisibleConversationText(window);
+
+            if (state.length < 5) {
+                JevShowAlert(
+                    @"Jev",
+                    @"没有读取到足够的聊天文字。"
+                );
+                return;
+            }
+
+            JevShowLoading();
 
             JevCallAPIWithState(state);
         }];
