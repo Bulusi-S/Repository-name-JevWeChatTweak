@@ -238,7 +238,7 @@ static void JevHideLoading(void) {
 }
 
 #pragma mark - API Key
-
+static void JevCallAPIWithState(NSString *state);
 static void JevAskForAPIKey(void) {
 
     dispatch_async(dispatch_get_main_queue(), ^{
